@@ -1,12 +1,12 @@
 /**
  * シンプルな Service Worker。
- * - ページ遷移(navigate)はネットワーク優先、オフラインならキャッシュした index.html
- * - JS / CSS / 画像はキャッシュ優先＋裏で更新（stale-while-revalidate）
+ * - HTML / CSS / JS はネットワーク優先。オフラインのときだけキャッシュを使う
+ * - アイコンなどはキャッシュ優先＋裏で更新（stale-while-revalidate）
  *
  * パスはすべて「この sw.js が置かれている場所」からの相対で解決するので、
  * GitHub Pages のサブパス配信（/reversi/）でもそのまま動く。
  */
-const CACHE_NAME = 'reversi-v3';
+const CACHE_NAME = 'reversi-v4';
 
 const ROOT = new URL('./', self.location.href);
 const APP_SHELL = [
@@ -44,13 +44,31 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   if (!request.url.startsWith(ROOT.href)) return;
 
-  if (request.mode === 'navigate') {
+  const path = new URL(request.url).pathname;
+  const isShell = request.mode === 'navigate' || /\.(html|css|js|webmanifest)$/.test(path);
+
+  // アプリ本体(HTML/CSS/JS)は常に最新を取りに行き、通信できないときだけキャッシュを使う。
+  // こうしないと、更新した直後の1回だけ古い版が表示されてしまう。
+  if (isShell) {
     event.respondWith(
-      fetch(request).catch(() => caches.match(new URL('index.html', ROOT).href))
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(request, { ignoreSearch: true }).then(
+            (cached) => cached || caches.match(new URL('index.html', ROOT).href)
+          )
+        )
     );
     return;
   }
 
+  // アイコンなど更新の少ないものはキャッシュ優先＋裏で更新
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request)
