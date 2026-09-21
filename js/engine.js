@@ -431,11 +431,16 @@
   /**
    * ルートで全ての合法手に点数をつける（反復深化）。
    * 時間切れになったら、最後に読み切った深さの結果を返す。
+   *
+   * options.trueScores を立てると、ルートの各手を毎回フルウィンドウで読む。
+   * 速度は落ちるが、返ってくる点数が「上限値」ではなく本当の評価値になるので、
+   * 段位ごとの揺らぎや解説の候補手比較に使える。
    */
   function searchRoot(board, player, options) {
     var maxDepth = options.depth || 6;
     var timeLimit = options.time || 1000;
     var exactFrom = options.exact || 0;
+    var trueScores = !!options.trueScores;
 
     var moves = legalMoves(board, player);
     if (moves.length === 0) {
@@ -465,7 +470,7 @@
         var n = make(work, sq, player, 0);
         var score = 0;
         try {
-          if (i === 0) {
+          if (trueScores || i === 0) {
             score = -negamax(work, -player, depth - 1, -INF, INF, false, 1);
           } else {
             score = -negamax(work, -player, depth - 1, -alpha - 1, -alpha, false, 1);
@@ -479,7 +484,7 @@
         }
         unmake(work, sq, player, 0, n);
         if (aborted) break;
-        if (score > alpha) alpha = score;
+        if (!trueScores && score > alpha) alpha = score;
         iter.push({ move: sq, score: score });
       }
       if (aborted) break;
@@ -539,7 +544,13 @@
       return { move: bestSq, level: level.name, style: 'greedy' };
     }
 
-    var res = searchRoot(work, player, level);
+    var res = searchRoot(work, player, {
+      depth: level.depth,
+      time: level.time,
+      exact: level.exact,
+      // 揺らぎを乗せる段位では、候補手の点数が正確でないと意味がない
+      trueScores: level.noise > 0
+    });
     if (level.noise > 0) {
       var best = res.move;
       var bestScore = -Infinity;
@@ -628,7 +639,8 @@
     var res = searchRoot(work, player, {
       depth: options.depth || 9,
       time: options.time || 1800,
-      exact: options.exact || 16
+      exact: options.exact || 16,
+      trueScores: true // 候補手どうしを比べるので、正確な点数が要る
     });
 
     var candidates = res.scored.slice(0, 4).map(function (item) {

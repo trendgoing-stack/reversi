@@ -74,7 +74,7 @@
     positions: [],
     index: 0,
     playerColor: BLACK,
-    level: 3,
+    level: 1, // 初回は初段から。段位はヘッダーでいつでも変えられる
     hints: true,
     coords: false,
     assistMove: -1,
