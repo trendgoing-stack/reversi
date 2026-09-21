@@ -508,18 +508,73 @@
    * 段位
    * ------------------------------------------------------------------ */
 
+  /**
+   * 段位の定義。tagline / note は選択画面にそのまま表示される説明文。
+   * 段位を増やすときは、この配列に1行足すだけでよい。
+   *
+   *   depth  … 通常の読みの深さ（手数）
+   *   time   … 1手に使う上限時間(ms)。反復深化なので、間に合わなければ浅い結果を使う
+   *   exact  … 残りマスがこの数以下になったら最後まで読み切る
+   *   noise  … 評価に乗せる揺らぎ。大きいほど最善手を外す
+   *   random … 完全にでたらめな手を打つ確率
+   *   greedy … いちばん多く返せる手を選ぶ確率
+   */
   var LEVELS = [
-    { name: '入門', depth: 1,  time: 150,  exact: 0,  noise: 0,   random: 0.35, greedy: 0.65 },
-    { name: '初段', depth: 2,  time: 250,  exact: 4,  noise: 220, random: 0.12, greedy: 0 },
-    { name: '二段', depth: 3,  time: 350,  exact: 6,  noise: 160, random: 0.07, greedy: 0 },
-    { name: '三段', depth: 4,  time: 500,  exact: 8,  noise: 110, random: 0.04, greedy: 0 },
-    { name: '四段', depth: 5,  time: 700,  exact: 10, noise: 70,  random: 0.02, greedy: 0 },
-    { name: '五段', depth: 6,  time: 900,  exact: 12, noise: 45,  random: 0.01, greedy: 0 },
-    { name: '六段', depth: 7,  time: 1200, exact: 13, noise: 25,  random: 0,    greedy: 0 },
-    { name: '七段', depth: 8,  time: 1600, exact: 14, noise: 12,  random: 0,    greedy: 0 },
-    { name: '八段', depth: 9,  time: 2000, exact: 15, noise: 5,   random: 0,    greedy: 0 },
-    { name: '九段', depth: 10, time: 2600, exact: 16, noise: 0,   random: 0,    greedy: 0 },
-    { name: '十段', depth: 12, time: 3400, exact: 18, noise: 0,   random: 0,    greedy: 0 }
+    {
+      name: '入門', depth: 1, time: 150, exact: 0, noise: 0, random: 0.35, greedy: 0.65,
+      tagline: '枚数を優先する',
+      note: 'いちばん多く石を返せる手を選びがちで、ときどき気まぐれに打ちます。ルールを覚えるのにちょうどいい相手です。'
+    },
+    {
+      name: '初段', depth: 2, time: 250, exact: 4, noise: 220, random: 0.12, greedy: 0,
+      tagline: '2手先を読む',
+      note: '隅が大事なことは知っていますが、読みが浅く手のブレも大きいので、隙がたくさん残ります。'
+    },
+    {
+      name: '二段', depth: 3, time: 350, exact: 6, noise: 160, random: 0.07, greedy: 0,
+      tagline: '3手先を読む',
+      note: '大きな見落としは減ります。残り6マスからは最後まで読み切って石数を合わせてきます。'
+    },
+    {
+      name: '三段', depth: 4, time: 500, exact: 8, noise: 110, random: 0.04, greedy: 0,
+      tagline: '4手先を読む',
+      note: 'あなたの打てる場所を減らす手を選び始めます。残り8マスから読み切り。'
+    },
+    {
+      name: '四段', depth: 5, time: 700, exact: 10, noise: 70, random: 0.02, greedy: 0,
+      tagline: '5手先を読む',
+      note: '序盤に石を取りすぎない打ち方をします。残り10マスから読み切り。'
+    },
+    {
+      name: '五段', depth: 6, time: 900, exact: 12, noise: 45, random: 0.01, greedy: 0,
+      tagline: '6手先を読む',
+      note: '隅からつながる確定石を意識して組み立ててきます。残り12マスから読み切り。'
+    },
+    {
+      name: '六段', depth: 7, time: 1200, exact: 13, noise: 25, random: 0, greedy: 0,
+      tagline: '7手先を読む',
+      note: 'X打ち・C打ちの隙を的確に突いてきます。こちらのミスはほぼ見逃しません。'
+    },
+    {
+      name: '七段', depth: 8, time: 1600, exact: 14, noise: 12, random: 0, greedy: 0,
+      tagline: '8手先を読む',
+      note: '中盤からこちらの選択肢を絞ってきます。残り14マスから読み切り。'
+    },
+    {
+      name: '八段', depth: 9, time: 2000, exact: 15, noise: 5, random: 0, greedy: 0,
+      tagline: '9手先を読む',
+      note: 'わずかな緩みも逃しません。勝つには序盤から形を崩さない必要があります。'
+    },
+    {
+      name: '九段', depth: 10, time: 2600, exact: 16, noise: 0, random: 0, greedy: 0,
+      tagline: '10手先を読む',
+      note: '手加減なし。残り16マスからは完全に読み切るので、終盤の逆転はほぼ望めません。'
+    },
+    {
+      name: '十段', depth: 12, time: 3400, exact: 18, noise: 0, random: 0, greedy: 0,
+      tagline: '12手先を読む',
+      note: '最強設定。残り18マスから完全読み切り。1手に数秒考えることがあります。'
+    }
   ];
 
   /** 段位に応じて着手を選ぶ */

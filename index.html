@@ -19,101 +19,141 @@
   </head>
   <body>
     <div class="app">
-      <header class="app-header">
-        <h1>リバーシ</h1>
-        <div class="header-controls">
-          <label class="field">
-            <span>段位</span>
-            <select id="level" aria-label="AIの段位"></select>
-          </label>
-          <label class="field">
-            <span>あなた</span>
-            <select id="playerColor" aria-label="自分の石の色">
-              <option value="1">黒（先手）</option>
-              <option value="-1">白（後手）</option>
-            </select>
-          </label>
+      <!-- ================= トップ画面 ================= -->
+      <section class="home" id="homeScreen">
+        <div class="home-hero">
+          <h1>リバーシ</h1>
+          <p>AIと対戦するオセロ。段位を選んで対局を始めましょう。</p>
         </div>
-      </header>
 
-      <section class="scoreboard" aria-live="polite">
-        <div class="score" id="scoreBlack">
-          <span class="stone stone-black" aria-hidden="true"></span>
-          <span class="score-count" id="countBlack">2</span>
-          <span class="score-label" id="labelBlack">あなた</span>
+        <div class="home-block">
+          <div class="home-block-head">
+            <h2>段位をえらぶ</h2>
+            <span class="home-note">上の段ほど深く読み、ミスが減ります</span>
+          </div>
+          <ul class="level-list" id="levelList"></ul>
         </div>
-        <div class="turn" id="turnText">黒番</div>
-        <div class="score" id="scoreWhite">
-          <span class="stone stone-white" aria-hidden="true"></span>
-          <span class="score-count" id="countWhite">2</span>
-          <span class="score-label" id="labelWhite">AI</span>
+
+        <div class="home-block">
+          <div class="home-block-head">
+            <h2>あなたの石</h2>
+            <span class="home-note">黒が先手です</span>
+          </div>
+          <div class="color-choice" id="colorChoice">
+            <button type="button" class="color-btn" data-color="1" aria-pressed="true">
+              <span class="stone stone-black" aria-hidden="true"></span>
+              <span>黒（先手）</span>
+            </button>
+            <button type="button" class="color-btn" data-color="-1" aria-pressed="false">
+              <span class="stone stone-white" aria-hidden="true"></span>
+              <span>白（後手）</span>
+            </button>
+          </div>
         </div>
+
+        <button type="button" class="start-btn" id="btnStart">対局開始</button>
+        <button type="button" class="resume-btn" id="btnResume" hidden>対局中の盤面にもどる</button>
+
+        <div class="home-block">
+          <div class="home-block-head">
+            <h2>勝敗記録</h2>
+            <span class="home-note">この端末に保存されます</span>
+          </div>
+          <div class="home-records" id="homeRecords"></div>
+        </div>
+
+        <footer class="app-footer">
+          <span>段位は入門から十段まで。今後さらに追加予定です。</span>
+        </footer>
       </section>
 
-      <div class="board-outer" id="boardOuter">
-        <div class="axis axis-x" id="axisX" aria-hidden="true"></div>
-        <div class="axis axis-y" id="axisY" aria-hidden="true"></div>
-        <div class="board" id="board" role="grid" aria-label="リバーシの盤面"></div>
-      </div>
+      <!-- ================= 対局画面 ================= -->
+      <section class="game" id="gameScreen" hidden>
+        <header class="app-header">
+          <button type="button" class="home-link" id="btnHome" aria-label="トップ画面にもどる">
+            ← トップ
+          </button>
+          <div class="header-meta">
+            <span class="badge" id="levelBadge">初段</span>
+            <span class="badge" id="colorBadge">あなた：黒</span>
+          </div>
+        </header>
 
-      <p class="message" id="message">黒番です。石を置いてください。</p>
+        <section class="scoreboard" aria-live="polite">
+          <div class="score" id="scoreBlack">
+            <span class="stone stone-black" aria-hidden="true"></span>
+            <span class="score-count" id="countBlack">2</span>
+            <span class="score-label" id="labelBlack">あなた</span>
+          </div>
+          <div class="turn" id="turnText">黒番</div>
+          <div class="score" id="scoreWhite">
+            <span class="stone stone-white" aria-hidden="true"></span>
+            <span class="score-count" id="countWhite">2</span>
+            <span class="score-label" id="labelWhite">AI</span>
+          </div>
+        </section>
 
-      <nav class="controls">
-        <button type="button" id="btnUndo" class="btn">
-          <span class="btn-icon">◀</span><span>戻る</span>
-        </button>
-        <button type="button" id="btnRedo" class="btn">
-          <span class="btn-icon">▶</span><span>進む</span>
-        </button>
-        <button type="button" id="btnAssist" class="btn btn-accent">
-          <span class="btn-icon">✦</span><span>アシスト</span>
-        </button>
-        <button type="button" id="btnExplain" class="btn btn-accent">
-          <span class="btn-icon">？</span><span>解説</span>
-        </button>
-        <button type="button" id="btnCoords" class="btn btn-toggle" aria-pressed="false">
-          <span class="btn-icon">＃</span><span>盤面</span>
-        </button>
-        <button type="button" id="btnHints" class="btn btn-toggle" aria-pressed="true">
-          <span class="btn-icon">●</span><span>ヒント</span>
-        </button>
-        <button type="button" id="btnNew" class="btn">
-          <span class="btn-icon">↻</span><span>新規対局</span>
-        </button>
-        <button type="button" id="btnRecords" class="btn">
-          <span class="btn-icon">▤</span><span>記録</span>
-        </button>
-      </nav>
-
-      <section class="panel" id="explainPanel" hidden>
-        <div class="panel-head">
-          <h2>解説</h2>
-          <button type="button" class="panel-close" data-close="explainPanel" aria-label="閉じる">×</button>
+        <div class="board-outer" id="boardOuter">
+          <div class="axis axis-x" id="axisX" aria-hidden="true"></div>
+          <div class="axis axis-y" id="axisY" aria-hidden="true"></div>
+          <div class="board" id="board" role="grid" aria-label="リバーシの盤面"></div>
         </div>
-        <div class="panel-body" id="explainBody"></div>
+
+        <p class="message" id="message">黒番です。石を置いてください。</p>
+
+        <nav class="controls">
+          <button type="button" id="btnUndo" class="btn">
+            <span class="btn-icon">◀</span><span>戻る</span>
+          </button>
+          <button type="button" id="btnRedo" class="btn">
+            <span class="btn-icon">▶</span><span>進む</span>
+          </button>
+          <button type="button" id="btnAssist" class="btn btn-toggle btn-accent" aria-pressed="false">
+            <span class="btn-icon">✦</span><span>アシスト</span>
+          </button>
+          <button type="button" id="btnExplain" class="btn btn-accent">
+            <span class="btn-icon">？</span><span>解説</span>
+          </button>
+          <button type="button" id="btnCoords" class="btn btn-toggle" aria-pressed="false">
+            <span class="btn-icon">＃</span><span>盤面</span>
+          </button>
+          <button type="button" id="btnHints" class="btn btn-toggle" aria-pressed="true">
+            <span class="btn-icon">●</span><span>ヒント</span>
+          </button>
+          <button type="button" id="btnNew" class="btn">
+            <span class="btn-icon">↻</span><span>やり直す</span>
+          </button>
+          <button type="button" id="btnRecords" class="btn">
+            <span class="btn-icon">▤</span><span>記録</span>
+          </button>
+        </nav>
+
+        <section class="panel" id="explainPanel" hidden>
+          <div class="panel-head">
+            <h2>解説</h2>
+            <button type="button" class="panel-close" data-close="explainPanel" aria-label="閉じる">×</button>
+          </div>
+          <div class="panel-body" id="explainBody"></div>
+        </section>
+
+        <section class="panel" id="recordsPanel" hidden>
+          <div class="panel-head">
+            <h2>勝敗記録</h2>
+            <button type="button" class="panel-close" data-close="recordsPanel" aria-label="閉じる">×</button>
+          </div>
+          <div class="panel-body" id="recordsBody"></div>
+        </section>
+
+        <section class="panel panel-flat" id="movesPanel">
+          <div class="panel-head">
+            <h2>棋譜</h2>
+            <span class="panel-note">タップでその局面へ</span>
+          </div>
+          <div class="panel-body">
+            <ol class="movelist" id="moveList"></ol>
+          </div>
+        </section>
       </section>
-
-      <section class="panel" id="recordsPanel" hidden>
-        <div class="panel-head">
-          <h2>勝敗記録</h2>
-          <button type="button" class="panel-close" data-close="recordsPanel" aria-label="閉じる">×</button>
-        </div>
-        <div class="panel-body" id="recordsBody"></div>
-      </section>
-
-      <section class="panel panel-flat" id="movesPanel">
-        <div class="panel-head">
-          <h2>棋譜</h2>
-          <span class="panel-note">タップでその局面へ</span>
-        </div>
-        <div class="panel-body">
-          <ol class="movelist" id="moveList"></ol>
-        </div>
-      </section>
-
-      <footer class="app-footer">
-        <span>段位は入門から十段まで。今後さらに追加予定です。</span>
-      </footer>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
@@ -123,9 +163,11 @@
         <h2 id="resultTitle">対局終了</h2>
         <p class="result-score" id="resultScore"></p>
         <p class="result-detail" id="resultDetail"></p>
+        <p class="result-record" id="resultRecord"></p>
         <div class="result-actions">
           <button type="button" class="btn btn-accent" id="btnResultNew">もう一局</button>
           <button type="button" class="btn" id="btnResultReview">局面を見直す</button>
+          <button type="button" class="btn result-wide" id="btnResultHome">トップ画面へ</button>
         </div>
       </div>
     </div>

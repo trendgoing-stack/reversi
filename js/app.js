@@ -1,5 +1,6 @@
 /**
  * リバーシの画面まわり。
+ * トップ画面（段位選択・勝敗記録）と対局画面を切り替えながら、
  * 盤面の描画、着手・巻き戻し、アシスト、解説、勝敗記録を扱う。
  */
 /* global ReversiEngine */
@@ -74,13 +75,16 @@
     positions: [],
     index: 0,
     playerColor: BLACK,
-    level: 1, // 初回は初段から。段位はヘッダーでいつでも変えられる
+    level: 1, // 初回は初段から。トップ画面でいつでも変えられる
     hints: true,
     coords: false,
+    assistMode: false, // 一度入れたら、切るまで毎手ずっと最善手を出す
     assistMove: -1,
+    assistToken: -1,
     candidates: [],
     thinking: false,
     token: 0,
+    started: false,
     recorded: false
   };
 
@@ -93,12 +97,14 @@
 
   function cacheElements() {
     [
-      'level', 'playerColor', 'board', 'axisX', 'axisY', 'boardOuter',
+      'homeScreen', 'gameScreen', 'levelList', 'colorChoice', 'btnStart', 'btnResume',
+      'homeRecords', 'btnHome', 'levelBadge', 'colorBadge',
+      'board', 'axisX', 'axisY', 'boardOuter',
       'countBlack', 'countWhite', 'labelBlack', 'labelWhite', 'scoreBlack', 'scoreWhite',
       'turnText', 'message', 'btnUndo', 'btnRedo', 'btnAssist', 'btnExplain', 'btnCoords',
       'btnHints', 'btnNew', 'btnRecords', 'explainPanel', 'explainBody', 'recordsPanel',
       'recordsBody', 'moveList', 'toast', 'resultOverlay', 'resultTitle', 'resultScore',
-      'resultDetail', 'btnResultNew', 'btnResultReview'
+      'resultDetail', 'resultRecord', 'btnResultNew', 'btnResultReview', 'btnResultHome'
     ].forEach(function (id) {
       el[id] = $(id);
     });
@@ -113,12 +119,13 @@
       var raw = localStorage.getItem(SETTINGS_KEY);
       if (!raw) return;
       var saved = JSON.parse(raw);
-      if (typeof saved.level === 'number') state.level = saved.level;
+      if (typeof saved.level === 'number' && E.LEVELS[saved.level]) state.level = saved.level;
       if (saved.playerColor === BLACK || saved.playerColor === WHITE) {
         state.playerColor = saved.playerColor;
       }
       if (typeof saved.hints === 'boolean') state.hints = saved.hints;
       if (typeof saved.coords === 'boolean') state.coords = saved.coords;
+      if (typeof saved.assistMode === 'boolean') state.assistMode = saved.assistMode;
     } catch (e) {
       /* 保存領域が使えない環境では既定値のまま */
     }
@@ -130,7 +137,8 @@
         level: state.level,
         playerColor: state.playerColor,
         hints: state.hints,
-        coords: state.coords
+        coords: state.coords,
+        assistMode: state.assistMode
       }));
     } catch (e) { /* 失敗しても対局は続けられる */ }
   }
@@ -159,6 +167,43 @@
     saveRecords(games);
   }
 
+  /** 段位ごとに勝敗を集計する */
+  function summarize(games) {
+    var byLevel = {};
+    var totals = { win: 0, lose: 0, draw: 0 };
+    games.forEach(function (g) {
+      var key = typeof g.levelIndex === 'number' ? g.levelIndex : 0;
+      if (!byLevel[key]) byLevel[key] = { win: 0, lose: 0, draw: 0, name: g.level || '' };
+      if (g.result === 'win' || g.result === 'lose' || g.result === 'draw') {
+        byLevel[key][g.result]++;
+        totals[g.result]++;
+      }
+    });
+    return { byLevel: byLevel, totals: totals };
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 画面の切り替え
+   * ------------------------------------------------------------------ */
+
+  function gameInProgress() {
+    return state.started && state.positions.length > 1 && current().turn !== 0;
+  }
+
+  function showHome() {
+    el.gameScreen.hidden = true;
+    el.homeScreen.hidden = false;
+    hide(el.resultOverlay);
+    renderHome();
+    window.scrollTo(0, 0);
+  }
+
+  function showGame() {
+    el.homeScreen.hidden = true;
+    el.gameScreen.hidden = false;
+    window.scrollTo(0, 0);
+  }
+
   /* ------------------------------------------------------------------ *
    * 局面の管理
    * ------------------------------------------------------------------ */
@@ -180,12 +225,15 @@
     state.positions = [{ board: board, turn: BLACK, move: -1, mover: 0, flips: [], passedBy: 0 }];
     state.index = 0;
     state.assistMove = -1;
+    state.assistToken = -1;
     state.candidates = [];
     state.thinking = false;
     state.recorded = false;
+    state.started = true;
     state.token++;
     hide(el.resultOverlay);
     el.explainPanel.hidden = true;
+    el.recordsPanel.hidden = true;
     render();
     scheduleAi();
   }
@@ -225,10 +273,6 @@
     scheduleAi();
   }
 
-  function isPlayersTurn() {
-    return current().turn === state.playerColor;
-  }
-
   /** 自分が打てる1つ前の局面。なければ -1。 */
   function prevPlayerIndex() {
     for (var i = state.index - 1; i >= 0; i--) {
@@ -246,14 +290,19 @@
     return state.index < last ? last : -1;
   }
 
-  function undo() {
-    var i = prevPlayerIndex();
-    if (i < 0) return;
+  function moveTo(i) {
     state.index = i;
     state.assistMove = -1;
+    state.assistToken = -1;
     state.candidates = [];
     state.thinking = false;
     state.token++;
+  }
+
+  function undo() {
+    var i = prevPlayerIndex();
+    if (i < 0) return;
+    moveTo(i);
     hide(el.resultOverlay);
     render();
   }
@@ -261,21 +310,14 @@
   function redo() {
     var i = nextPlayerIndex();
     if (i < 0) return;
-    state.index = i;
-    state.assistMove = -1;
-    state.candidates = [];
-    state.token++;
+    moveTo(i);
     render();
     scheduleAi();
   }
 
   function jumpTo(i) {
     if (i < 0 || i >= state.positions.length) return;
-    state.index = i;
-    state.assistMove = -1;
-    state.candidates = [];
-    state.thinking = false;
-    state.token++;
+    moveTo(i);
     hide(el.resultOverlay);
     render();
     scheduleAi();
@@ -316,7 +358,44 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * 描画
+   * アシスト（モード。入れている間はずっと最善手を出す）
+   * ------------------------------------------------------------------ */
+
+  function toggleAssist() {
+    state.assistMode = !state.assistMode;
+    state.assistMove = -1;
+    state.assistToken = -1;
+    saveSettings();
+    render();
+    toast(state.assistMode
+      ? 'アシストON — 手番のたびに最善手を光らせます'
+      : 'アシストOFF');
+  }
+
+  /** いまの局面の最善手をまだ調べていなければ、裏で調べて光らせる */
+  function maybeAssist() {
+    if (!state.assistMode) return;
+    var pos = current();
+    if (pos.turn === 0 || pos.turn !== state.playerColor) return;
+    if (state.thinking) return;
+    if (state.assistToken === state.token) return; // この局面はもう依頼済み
+
+    state.assistToken = state.token;
+    var token = state.token;
+    ai.call('best', {
+      board: Array.prototype.slice.call(pos.board),
+      player: pos.turn,
+      options: { depth: 8, time: 1200, exact: 15 }
+    }, function (move) {
+      if (token !== state.token) return;
+      if (move === null || move === undefined || move < 0) return;
+      state.assistMove = move;
+      render();
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 描画（対局画面）
    * ------------------------------------------------------------------ */
 
   var STAR_CELLS = { 18: 'star-tl', 21: 'star-tr', 42: 'star-bl', 45: 'star-br' };
@@ -398,8 +477,10 @@
     el.countWhite.textContent = String(counts.white);
 
     var playerIsBlack = state.playerColor === BLACK;
-    el.labelBlack.textContent = playerIsBlack ? 'あなた' : 'AI（' + levelName() + '）';
-    el.labelWhite.textContent = playerIsBlack ? 'AI（' + levelName() + '）' : 'あなた';
+    el.labelBlack.textContent = playerIsBlack ? 'あなた' : 'AI';
+    el.labelWhite.textContent = playerIsBlack ? 'AI' : 'あなた';
+    el.levelBadge.textContent = 'AI ' + levelName();
+    el.colorBadge.textContent = 'あなた：' + (playerIsBlack ? '黒' : '白');
     el.scoreBlack.classList.toggle('active', pos.turn === BLACK);
     el.scoreWhite.classList.toggle('active', pos.turn === WHITE);
 
@@ -414,7 +495,10 @@
       if (state.thinking) {
         setMessage('AI（' + levelName() + '）が考えています…', false);
       } else if (pos.turn === state.playerColor) {
-        setMessage('あなたの手番です。置ける場所は ' + legal.length + ' か所。', false);
+        var hint = state.assistMode && state.assistMove >= 0
+          ? '　おすすめは ' + E.toNotation(state.assistMove) + '。'
+          : '';
+        setMessage('あなたの手番です。置ける場所は ' + legal.length + ' か所。' + hint, false);
       } else {
         setMessage('AIの手番です。', false);
       }
@@ -422,12 +506,13 @@
 
     el.btnUndo.disabled = prevPlayerIndex() < 0;
     el.btnRedo.disabled = nextPlayerIndex() < 0;
-    el.btnAssist.disabled = pos.turn === 0 || state.thinking;
     el.btnExplain.disabled = state.thinking;
+    el.btnAssist.setAttribute('aria-pressed', String(state.assistMode));
     el.btnCoords.setAttribute('aria-pressed', String(state.coords));
     el.btnHints.setAttribute('aria-pressed', String(state.hints));
 
     renderMoveList();
+    maybeAssist();
   }
 
   function setMessage(text, alert) {
@@ -484,36 +569,151 @@
   }
 
   /* ------------------------------------------------------------------ *
-   * アシスト（最善手を濃くハイライト）
+   * トップ画面
    * ------------------------------------------------------------------ */
 
-  function assist() {
-    var pos = current();
-    if (pos.turn === 0) return;
-    if (state.assistMove >= 0) { // もう一度押したら消す
-      state.assistMove = -1;
-      render();
+  function renderHome() {
+    renderLevelList();
+    renderColorChoice();
+    buildRecordsView(el.homeRecords);
+    el.btnResume.hidden = !gameInProgress();
+  }
+
+  function renderLevelList() {
+    var stats = summarize(loadRecords()).byLevel;
+    var list = el.levelList;
+    list.innerHTML = '';
+
+    E.LEVELS.forEach(function (level, i) {
+      var li = document.createElement('li');
+      var card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'level-card';
+      card.dataset.level = String(i);
+      card.setAttribute('aria-pressed', String(i === state.level));
+
+      var head = document.createElement('span');
+      head.className = 'level-head';
+
+      var rank = document.createElement('span');
+      rank.className = 'level-rank';
+      rank.textContent = level.name;
+      head.appendChild(rank);
+
+      var tag = document.createElement('span');
+      tag.className = 'level-tag';
+      tag.textContent = level.tagline || '';
+      head.appendChild(tag);
+
+      var record = document.createElement('span');
+      record.className = 'level-record';
+      var r = stats[i];
+      record.textContent = r
+        ? r.win + '勝' + r.lose + '敗' + (r.draw ? r.draw + '分' : '')
+        : '未対局';
+      head.appendChild(record);
+
+      card.appendChild(head);
+
+      var desc = document.createElement('span');
+      desc.className = 'level-desc';
+      desc.textContent = level.note || '';
+      card.appendChild(desc);
+
+      var meter = document.createElement('span');
+      meter.className = 'level-meter';
+      var fill = document.createElement('i');
+      fill.style.width = Math.round(((i + 1) / E.LEVELS.length) * 100) + '%';
+      meter.appendChild(fill);
+      card.appendChild(meter);
+
+      li.appendChild(card);
+      list.appendChild(li);
+    });
+  }
+
+  function renderColorChoice() {
+    var buttons = el.colorChoice.querySelectorAll('.color-btn');
+    Array.prototype.forEach.call(buttons, function (btn) {
+      btn.setAttribute('aria-pressed', String(Number(btn.dataset.color) === state.playerColor));
+    });
+  }
+
+  /* ------------------------------------------------------------------ *
+   * 勝敗記録の表示
+   * ------------------------------------------------------------------ */
+
+  function buildRecordsView(container) {
+    var games = loadRecords();
+    container.innerHTML = '';
+
+    if (!games.length) {
+      container.appendChild(para('まだ記録がありません。対局を終えると、段位ごとに勝敗が残ります。'));
       return;
     }
-    var token = state.token;
-    setMessage('最善手を探しています…', false);
-    el.btnAssist.disabled = true;
 
-    ai.call('best', {
-      board: Array.prototype.slice.call(pos.board),
-      player: pos.turn,
-      options: { depth: 9, time: 1500, exact: 16 }
-    }, function (move) {
-      if (token !== state.token) return;
-      el.btnAssist.disabled = false;
-      if (move === null || move === undefined || move < 0) {
-        render();
-        return;
-      }
-      state.assistMove = move;
-      render();
-      toast('おすすめは ' + E.toNotation(move) + ' です');
+    var stats = summarize(games);
+    var table = document.createElement('table');
+    table.className = 'record-table';
+    table.innerHTML = '<thead><tr><th>段位</th><th>勝</th><th>敗</th><th>分</th><th>勝率</th></tr></thead>';
+    var tbody = document.createElement('tbody');
+
+    Object.keys(stats.byLevel)
+      .sort(function (a, b) { return Number(a) - Number(b); })
+      .forEach(function (key) {
+        var r = stats.byLevel[key];
+        var played = r.win + r.lose + r.draw;
+        var rate = played ? Math.round((r.win / played) * 100) : 0;
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + (E.LEVELS[key] ? E.LEVELS[key].name : r.name) + '</td>'
+          + '<td>' + r.win + '</td><td>' + r.lose + '</td><td>' + r.draw + '</td>'
+          + '<td>' + rate + '%</td>';
+        tbody.appendChild(tr);
+      });
+
+    var totals = stats.totals;
+    var playedAll = totals.win + totals.lose + totals.draw;
+    var trTotal = document.createElement('tr');
+    trTotal.className = 'record-total';
+    trTotal.innerHTML = '<td>合計</td><td>' + totals.win + '</td><td>' + totals.lose + '</td>'
+      + '<td>' + totals.draw + '</td><td>'
+      + (playedAll ? Math.round((totals.win / playedAll) * 100) : 0) + '%</td>';
+    tbody.appendChild(trTotal);
+    table.appendChild(tbody);
+    container.appendChild(table);
+
+    var recent = document.createElement('ul');
+    recent.className = 'recent-list';
+    games.slice(-8).reverse().forEach(function (g) {
+      var li = document.createElement('li');
+      var when = new Date(g.at);
+      var date = isNaN(when.getTime()) ? '' :
+        (when.getMonth() + 1) + '/' + when.getDate() + ' ' +
+        ('0' + when.getHours()).slice(-2) + ':' + ('0' + when.getMinutes()).slice(-2);
+      var mark = g.result === 'win' ? '<span class="res-win">勝</span>'
+        : g.result === 'lose' ? '<span class="res-lose">敗</span>' : '分';
+      li.innerHTML = date + '　' + g.level + '　' + mark + '　' + g.mine + '-' + g.theirs
+        + '（' + (g.color === BLACK ? '黒' : '白') + '番）';
+      recent.appendChild(li);
     });
+    container.appendChild(recent);
+
+    var actions = document.createElement('div');
+    actions.className = 'record-actions';
+    var reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'link-danger';
+    reset.textContent = '記録をすべて消す';
+    reset.addEventListener('click', function () {
+      if (window.confirm('保存されている勝敗記録をすべて削除します。よろしいですか？')) {
+        saveRecords([]);
+        buildRecordsView(container);
+        if (!el.homeScreen.hidden) renderLevelList();
+        toast('記録を消去しました');
+      }
+    });
+    actions.appendChild(reset);
+    container.appendChild(actions);
   }
 
   /* ------------------------------------------------------------------ *
@@ -758,6 +958,7 @@
     /* 盤面のハイライトを更新 */
     state.candidates = report.candidates.map(function (cand) { return cand.move; });
     state.assistMove = report.best;
+    state.assistToken = state.token;
     render();
   }
 
@@ -805,88 +1006,14 @@
     el.resultScore.textContent = mine + ' — ' + theirs;
     el.resultDetail.textContent = '対戦相手：' + levelName() + '　'
       + 'あなたの石：' + (state.playerColor === BLACK ? '黒' : '白');
+
+    var r = summarize(loadRecords()).byLevel[state.level];
+    el.resultRecord.textContent = r
+      ? levelName() + 'との通算 ' + r.win + '勝' + r.lose + '敗' + r.draw + '分'
+      : '';
+
     show(el.resultOverlay);
     render();
-  }
-
-  function renderRecords() {
-    var games = loadRecords();
-    var body = el.recordsBody;
-    body.innerHTML = '';
-
-    if (!games.length) {
-      body.appendChild(para('まだ記録がありません。対局を終えると、段位ごとに勝敗が残ります。'));
-      return;
-    }
-
-    var byLevel = {};
-    games.forEach(function (g) {
-      var key = typeof g.levelIndex === 'number' ? g.levelIndex : 0;
-      if (!byLevel[key]) byLevel[key] = { win: 0, lose: 0, draw: 0, name: g.level || '' };
-      byLevel[key][g.result] = (byLevel[key][g.result] || 0) + 1;
-    });
-
-    var table = document.createElement('table');
-    table.className = 'record-table';
-    table.innerHTML = '<thead><tr><th>段位</th><th>勝</th><th>敗</th><th>分</th><th>勝率</th></tr></thead>';
-    var tbody = document.createElement('tbody');
-
-    var totals = { win: 0, lose: 0, draw: 0 };
-    Object.keys(byLevel)
-      .sort(function (a, b) { return Number(a) - Number(b); })
-      .forEach(function (key) {
-        var r = byLevel[key];
-        totals.win += r.win; totals.lose += r.lose; totals.draw += r.draw;
-        var played = r.win + r.lose + r.draw;
-        var rate = played ? Math.round((r.win / played) * 100) : 0;
-        var tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + (E.LEVELS[key] ? E.LEVELS[key].name : r.name) + '</td>'
-          + '<td>' + r.win + '</td><td>' + r.lose + '</td><td>' + r.draw + '</td>'
-          + '<td>' + rate + '%</td>';
-        tbody.appendChild(tr);
-      });
-
-    var playedAll = totals.win + totals.lose + totals.draw;
-    var trTotal = document.createElement('tr');
-    trTotal.className = 'record-total';
-    trTotal.innerHTML = '<td>合計</td><td>' + totals.win + '</td><td>' + totals.lose + '</td>'
-      + '<td>' + totals.draw + '</td><td>'
-      + (playedAll ? Math.round((totals.win / playedAll) * 100) : 0) + '%</td>';
-    tbody.appendChild(trTotal);
-    table.appendChild(tbody);
-    body.appendChild(table);
-
-    var recent = document.createElement('ul');
-    recent.className = 'recent-list';
-    games.slice(-8).reverse().forEach(function (g) {
-      var li = document.createElement('li');
-      var when = new Date(g.at);
-      var date = isNaN(when.getTime()) ? '' :
-        (when.getMonth() + 1) + '/' + when.getDate() + ' ' +
-        ('0' + when.getHours()).slice(-2) + ':' + ('0' + when.getMinutes()).slice(-2);
-      var mark = g.result === 'win' ? '<span class="res-win">勝</span>'
-        : g.result === 'lose' ? '<span class="res-lose">敗</span>' : '分';
-      li.innerHTML = date + '　' + g.level + '　' + mark + '　' + g.mine + '-' + g.theirs
-        + '（' + (g.color === BLACK ? '黒' : '白') + '番）';
-      recent.appendChild(li);
-    });
-    body.appendChild(recent);
-
-    var actions = document.createElement('div');
-    actions.className = 'record-actions';
-    var reset = document.createElement('button');
-    reset.type = 'button';
-    reset.className = 'link-danger';
-    reset.textContent = '記録をすべて消す';
-    reset.addEventListener('click', function () {
-      if (window.confirm('保存されている勝敗記録をすべて削除します。よろしいですか？')) {
-        saveRecords([]);
-        renderRecords();
-        toast('記録を消去しました');
-      }
-    });
-    actions.appendChild(reset);
-    body.appendChild(actions);
   }
 
   /* ------------------------------------------------------------------ *
@@ -906,21 +1033,44 @@
   function hide(node) { node.hidden = true; }
 
   /* ------------------------------------------------------------------ *
-   * 初期化
+   * イベント
    * ------------------------------------------------------------------ */
 
-  function fillLevelSelect() {
-    E.LEVELS.forEach(function (level, i) {
-      var option = document.createElement('option');
-      option.value = String(i);
-      option.textContent = level.name;
-      el.level.appendChild(option);
-    });
-    el.level.value = String(state.level);
-    el.playerColor.value = String(state.playerColor);
-  }
-
   function bindEvents() {
+    /* --- トップ画面 --- */
+
+    el.levelList.addEventListener('click', function (event) {
+      var card = event.target.closest ? event.target.closest('.level-card') : null;
+      if (!card) return;
+      state.level = Number(card.dataset.level);
+      saveSettings();
+      renderLevelList();
+    });
+
+    el.colorChoice.addEventListener('click', function (event) {
+      var btn = event.target.closest ? event.target.closest('.color-btn') : null;
+      if (!btn) return;
+      state.playerColor = Number(btn.dataset.color);
+      saveSettings();
+      renderColorChoice();
+    });
+
+    el.btnStart.addEventListener('click', function () {
+      if (gameInProgress() && !window.confirm('対局中です。新しく始めますか？')) return;
+      showGame();
+      newGame();
+    });
+
+    el.btnResume.addEventListener('click', function () {
+      showGame();
+      render();
+      scheduleAi();
+    });
+
+    /* --- 対局画面 --- */
+
+    el.btnHome.addEventListener('click', showHome);
+
     el.board.addEventListener('click', function (event) {
       var cell = event.target.closest ? event.target.closest('.cell') : null;
       if (!cell) return;
@@ -940,23 +1090,9 @@
       jumpTo(Number(btn.dataset.jump));
     });
 
-    el.level.addEventListener('change', function () {
-      state.level = Number(el.level.value);
-      saveSettings();
-      render();
-      toast('AIの段位を ' + levelName() + ' にしました');
-    });
-
-    el.playerColor.addEventListener('change', function () {
-      state.playerColor = Number(el.playerColor.value);
-      saveSettings();
-      newGame();
-      toast('あなたの石を' + (state.playerColor === BLACK ? '黒（先手）' : '白（後手）') + 'にして新規対局');
-    });
-
     el.btnUndo.addEventListener('click', undo);
     el.btnRedo.addEventListener('click', redo);
-    el.btnAssist.addEventListener('click', assist);
+    el.btnAssist.addEventListener('click', toggleAssist);
     el.btnExplain.addEventListener('click', explain);
 
     el.btnCoords.addEventListener('click', function () {
@@ -973,15 +1109,13 @@
     });
 
     el.btnNew.addEventListener('click', function () {
-      if (state.positions.length > 1 && current().turn !== 0) {
-        if (!window.confirm('対局中です。新しく始めますか？')) return;
-      }
+      if (gameInProgress() && !window.confirm('いまの対局をやり直しますか？')) return;
       newGame();
     });
 
     el.btnRecords.addEventListener('click', function () {
       if (el.recordsPanel.hidden) {
-        renderRecords();
+        buildRecordsView(el.recordsBody);
         el.recordsPanel.hidden = false;
         el.recordsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } else {
@@ -996,6 +1130,7 @@
         if (btn.dataset.close === 'explainPanel') {
           state.candidates = [];
           state.assistMove = -1;
+          state.assistToken = -1;
           render();
         }
       });
@@ -1003,8 +1138,10 @@
 
     el.btnResultNew.addEventListener('click', newGame);
     el.btnResultReview.addEventListener('click', function () { hide(el.resultOverlay); });
+    el.btnResultHome.addEventListener('click', showHome);
 
     document.addEventListener('keydown', function (event) {
+      if (el.gameScreen.hidden) return;
       if (event.target && /^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName)) return;
       if (event.key === 'ArrowLeft') { undo(); event.preventDefault(); }
       else if (event.key === 'ArrowRight') { redo(); event.preventDefault(); }
@@ -1022,10 +1159,14 @@
   function init() {
     cacheElements();
     loadSettings();
-    fillLevelSelect();
     buildBoard();
     bindEvents();
-    newGame();
+
+    // 盤面は先に作っておき、最初に見せるのはトップ画面
+    state.positions = [{
+      board: E.initialBoard(), turn: BLACK, move: -1, mover: 0, flips: [], passedBy: 0
+    }];
+    showHome();
     registerServiceWorker();
   }
 

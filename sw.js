@@ -6,7 +6,7 @@
  * パスはすべて「この sw.js が置かれている場所」からの相対で解決するので、
  * GitHub Pages のサブパス配信（/reversi/）でもそのまま動く。
  */
-const CACHE_NAME = 'reversi-v2';
+const CACHE_NAME = 'reversi-v3';
 
 const ROOT = new URL('./', self.location.href);
 const APP_SHELL = [
