@@ -1,0 +1,32 @@
+{
+  "name": "リバーシ",
+  "short_name": "リバーシ",
+  "description": "AIと対戦できるリバーシ（オセロ）。段位は入門から十段まで。",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1512",
+  "theme_color": "#0f2a1d",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

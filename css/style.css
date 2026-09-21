@@ -1,0 +1,811 @@
+/* リバーシ — iPhone のホーム画面から起動しても落ち着いて見えるダークテーマ */
+
+:root {
+  --bg: #0b1512;
+  --bg-soft: #13241e;
+  --panel: #172b23;
+  --line: #244135;
+  --text: #e8f1ec;
+  --text-dim: #9db3a8;
+  --accent: #f0c45a;
+  --accent-strong: #ffd97a;
+  --board: #1c7a4d;
+  --board-dark: #15633e;
+  --board-frame: #0d3d27;
+  --danger: #ef7a6b;
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* display を持つ要素にも hidden 属性を効かせる */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background:
+    radial-gradient(120% 80% at 50% 0%, #16332a 0%, var(--bg) 60%) no-repeat fixed,
+    var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI',
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: contain;
+}
+
+.app {
+  max-width: 520px;
+  margin: 0 auto;
+  padding:
+    calc(env(safe-area-inset-top) + 12px)
+    calc(env(safe-area-inset-right) + 12px)
+    calc(env(safe-area-inset-bottom) + 24px)
+    calc(env(safe-area-inset-left) + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---------- ヘッダー ---------- */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+}
+
+.header-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.field select {
+  appearance: none;
+  background: var(--bg-soft);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 7px 26px 7px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* ---------- スコア ---------- */
+
+.scoreboard {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  padding: 4px 6px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.score:last-child {
+  flex-direction: row-reverse;
+}
+
+.score.active {
+  background: rgba(240, 196, 90, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(240, 196, 90, 0.45);
+}
+
+.stone {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.stone-black {
+  background: radial-gradient(circle at 32% 28%, #5c6b66, #101816 65%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.stone-white {
+  background: radial-gradient(circle at 32% 28%, #ffffff, #c9d3ce 70%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.score-count {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 2ch;
+  text-align: center;
+}
+
+.score-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.turn {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ---------- 盤面 ---------- */
+
+.board-outer {
+  display: grid;
+  grid-template-columns: 0 1fr;
+  grid-template-rows: 0 1fr;
+  gap: 0;
+  transition: gap 0.15s;
+}
+
+.board-outer.show-coords {
+  grid-template-columns: 18px 1fr;
+  grid-template-rows: 18px 1fr;
+  gap: 4px;
+}
+
+.axis {
+  display: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-outer.show-coords .axis {
+  display: flex;
+}
+
+.axis-x {
+  grid-column: 2;
+  grid-row: 1;
+  /* 盤面の padding 分だけ内側に寄せて、マスの中心と揃える */
+  padding: 0 6px;
+}
+
+.axis-y {
+  grid-column: 1;
+  grid-row: 2;
+  flex-direction: column;
+  padding: 6px 0;
+}
+
+.axis span {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.board {
+  grid-column: 2;
+  grid-row: 2;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  gap: 2px;
+  padding: 6px;
+  background: var(--board-frame);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  touch-action: manipulation;
+}
+
+.board.thinking {
+  pointer-events: none;
+}
+
+.cell {
+  position: relative;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  border-radius: 3px;
+  background: linear-gradient(160deg, var(--board) 0%, var(--board-dark) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+/* 星（打点の目印）。マスの角に置いて、盤の交点に見えるようにする。 */
+.cell.star::before {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.cell.star-tl::before { top: -4px; left: -4px; }
+.cell.star-tr::before { top: -4px; right: -4px; }
+.cell.star-bl::before { bottom: -4px; left: -4px; }
+.cell.star-br::before { bottom: -4px; right: -4px; }
+
+.disc {
+  position: relative;
+  width: 84%;
+  height: 84%;
+  border-radius: 50%;
+  display: none;
+}
+
+.cell.black .disc,
+.cell.white .disc {
+  display: block;
+}
+
+.cell.black .disc {
+  background: radial-gradient(circle at 32% 28%, #5c6b66, #0d1413 68%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.55);
+}
+
+.cell.white .disc {
+  background: radial-gradient(circle at 32% 28%, #ffffff, #c6d0cb 72%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+.cell .disc.placed {
+  animation: pop 0.22s ease-out;
+}
+
+.cell .disc.flipped {
+  animation: flip 0.32s ease-in-out;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.2);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes flip {
+  0% {
+    transform: rotateY(0deg) scaleX(1);
+  }
+  50% {
+    transform: rotateY(90deg) scaleX(0.08);
+  }
+  100% {
+    transform: rotateY(0deg) scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cell .disc.placed,
+  .cell .disc.flipped {
+    animation: none;
+  }
+}
+
+/* 置けるマスのヒント */
+.cell.legal::after {
+  content: '';
+  position: absolute;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.cell.legal:active::after {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* アシストの最善手 */
+.cell.best {
+  background: linear-gradient(160deg, #2f9a67 0%, #23794f 100%);
+  box-shadow: inset 0 0 0 2px var(--accent-strong);
+  animation: glow 1.4s ease-in-out infinite;
+}
+
+.cell.best::after {
+  background: var(--accent-strong);
+  width: 34%;
+  height: 34%;
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 2px rgba(255, 217, 122, 0.55);
+  }
+  50% {
+    box-shadow: inset 0 0 0 3px rgba(255, 217, 122, 1);
+  }
+}
+
+/* 候補手（解説の2番手以降） */
+.cell.candidate {
+  box-shadow: inset 0 0 0 2px rgba(240, 196, 90, 0.45);
+}
+
+.cell.last-move .disc::after {
+  content: '';
+  position: absolute;
+  inset: 34%;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0.9;
+}
+
+.cell .coord {
+  position: absolute;
+  bottom: 1px;
+  right: 2px;
+  font-size: 8px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.4);
+  display: none;
+  pointer-events: none;
+}
+
+.board-outer.show-coords .cell .coord {
+  display: block;
+}
+
+/* 石が乗っているマスの座標は隠して、盤面をすっきり見せる */
+.board-outer.show-coords .cell.black .coord,
+.board-outer.show-coords .cell.white .coord {
+  display: none;
+}
+
+/* ---------- メッセージ・操作ボタン ---------- */
+
+.message {
+  margin: 0;
+  min-height: 1.5em;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.message.alert {
+  color: var(--accent-strong);
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  border-radius: 11px;
+  padding: 8px 4px;
+  min-height: 52px;
+  font-size: 12px;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  transition: transform 0.08s, background 0.15s, border-color 0.15s;
+}
+
+.btn:active {
+  transform: scale(0.96);
+  background: #1d362c;
+}
+
+.btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.btn-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.btn-accent {
+  border-color: rgba(240, 196, 90, 0.5);
+  color: var(--accent-strong);
+}
+
+.btn-toggle[aria-pressed='true'] {
+  background: rgba(240, 196, 90, 0.16);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+/* ---------- パネル ---------- */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+}
+
+.panel-note {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.panel-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.panel-body {
+  padding: 12px;
+  font-size: 13px;
+}
+
+.panel-flat {
+  background: transparent;
+}
+
+/* 解説 */
+
+.explain-section {
+  margin: 0 0 14px;
+}
+
+.explain-section:last-child {
+  margin-bottom: 0;
+}
+
+.explain-section h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+
+.explain-section p {
+  margin: 0 0 6px;
+}
+
+.explain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.explain-list li {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.explain-list .move-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.move-tag {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.move-rank {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.move-why {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.bar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  /* 左ほどAI有利、右ほどプレイヤー有利 */
+  background: linear-gradient(
+    90deg,
+    rgba(239, 122, 107, 0.85) 0%,
+    rgba(120, 140, 130, 0.55) 50%,
+    rgba(127, 214, 164, 0.9) 100%
+  );
+  margin: 8px 0 6px;
+}
+
+.bar-mark {
+  position: absolute;
+  top: -3px;
+  width: 3px;
+  height: 14px;
+  background: var(--accent-strong);
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+
+/* 記録 */
+
+.record-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-table th,
+.record-table td {
+  padding: 6px 4px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 12px;
+}
+
+.record-table th {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.record-table td:first-child,
+.record-table th:first-child {
+  text-align: left;
+}
+
+.record-total {
+  font-weight: 700;
+}
+
+.record-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.link-danger {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(239, 122, 107, 0.4);
+  color: var(--danger);
+  border-radius: 9px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.recent-list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.recent-list .res-win {
+  color: #7fd6a4;
+}
+
+.recent-list .res-lose {
+  color: var(--danger);
+}
+
+/* 棋譜 */
+
+.movelist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.movelist li button {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text-dim);
+  border-radius: 7px;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.movelist li button.current {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.movelist li button .who {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.movelist li button .who.black {
+  background: #0d1413;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.movelist li button .who.white {
+  background: #eef3f0;
+}
+
+.movelist-empty {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* ---------- フッター・トースト・結果 ---------- */
+
+.app-footer {
+  text-align: center;
+  font-size: 11px;
+  color: rgba(157, 179, 168, 0.65);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  transform: translateX(-50%);
+  background: rgba(15, 32, 26, 0.96);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 30;
+  max-width: 90vw;
+  text-align: center;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 12, 10, 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 40;
+}
+
+.result-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 22px 20px;
+  width: min(360px, 100%);
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.result-card h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  color: var(--accent-strong);
+}
+
+.result-score {
+  margin: 0 0 6px;
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-detail {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.result-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.result-actions .btn {
+  flex-direction: row;
+  min-height: 44px;
+  font-size: 13px;
+}
+
+/* 画面が広いときは盤面を少し大きく見せる */
+@media (min-width: 430px) {
+  body {
+    font-size: 16px;
+  }
+  .btn {
+    font-size: 13px;
+  }
+}
