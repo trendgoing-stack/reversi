@@ -78,9 +78,11 @@
     level: 1, // 初回は初段から。トップ画面でいつでも変えられる
     hints: true,
     coords: false,
-    assistMode: false, // 一度入れたら、切るまで毎手ずっと最善手を出す
+    assistMode: false, // 入れている間は毎手ずっと最善手を出す（対局を始めるたびにOFF）
     assistMove: -1,
     assistToken: -1,
+    explainMode: false, // 入れている間は毎手ずっと解説を出し直す
+    explainToken: -1,
     candidates: [],
     thinking: false,
     token: 0,
@@ -98,7 +100,7 @@
   function cacheElements() {
     [
       'homeScreen', 'gameScreen', 'levelList', 'colorChoice', 'btnStart', 'btnResume',
-      'homeRecords', 'btnHome', 'levelBadge', 'colorBadge',
+      'homeRecords', 'btnHome', 'levelBadge', 'colorBadge', 'updateBanner', 'appVersion',
       'board', 'axisX', 'axisY', 'boardOuter',
       'countBlack', 'countWhite', 'labelBlack', 'labelWhite', 'scoreBlack', 'scoreWhite',
       'turnText', 'message', 'btnUndo', 'btnRedo', 'btnAssist', 'btnExplain', 'btnCoords',
@@ -125,7 +127,6 @@
       }
       if (typeof saved.hints === 'boolean') state.hints = saved.hints;
       if (typeof saved.coords === 'boolean') state.coords = saved.coords;
-      if (typeof saved.assistMode === 'boolean') state.assistMode = saved.assistMode;
     } catch (e) {
       /* 保存領域が使えない環境では既定値のまま */
     }
@@ -137,8 +138,7 @@
         level: state.level,
         playerColor: state.playerColor,
         hints: state.hints,
-        coords: state.coords,
-        assistMode: state.assistMode
+        coords: state.coords
       }));
     } catch (e) { /* 失敗しても対局は続けられる */ }
   }
@@ -224,8 +224,11 @@
     var board = E.initialBoard();
     state.positions = [{ board: board, turn: BLACK, move: -1, mover: 0, flips: [], passedBy: 0 }];
     state.index = 0;
+    state.assistMode = false; // 対局開始時はアシストOFF（ヒントは設定のまま）
     state.assistMove = -1;
     state.assistToken = -1;
+    state.explainMode = false;
+    state.explainToken = -1;
     state.candidates = [];
     state.thinking = false;
     state.recorded = false;
@@ -365,7 +368,6 @@
     state.assistMode = !state.assistMode;
     state.assistMove = -1;
     state.assistToken = -1;
-    saveSettings();
     render();
     toast(state.assistMode
       ? 'アシストON — 手番のたびに最善手を光らせます'
@@ -375,6 +377,7 @@
   /** いまの局面の最善手をまだ調べていなければ、裏で調べて光らせる */
   function maybeAssist() {
     if (!state.assistMode) return;
+    if (state.explainMode) return; // 解説モードの分析が最善手も教えてくれる
     var pos = current();
     if (pos.turn === 0 || pos.turn !== state.playerColor) return;
     if (state.thinking) return;
@@ -508,11 +511,13 @@
     el.btnRedo.disabled = nextPlayerIndex() < 0;
     el.btnExplain.disabled = state.thinking;
     el.btnAssist.setAttribute('aria-pressed', String(state.assistMode));
+    el.btnExplain.setAttribute('aria-pressed', String(state.explainMode));
     el.btnCoords.setAttribute('aria-pressed', String(state.coords));
     el.btnHints.setAttribute('aria-pressed', String(state.hints));
 
     renderMoveList();
     maybeAssist();
+    maybeExplain();
   }
 
   function setMessage(text, alert) {
@@ -792,23 +797,45 @@
     return p;
   }
 
-  function explain() {
-    if (!el.explainPanel.hidden && state.candidates.length) {
+  function toggleExplain() {
+    state.explainMode = !state.explainMode;
+    state.explainToken = -1;
+
+    if (!state.explainMode) {
       el.explainPanel.hidden = true;
       state.candidates = [];
+      if (!state.assistMode) state.assistMove = -1;
       render();
+      toast('解説OFF');
       return;
     }
+
+    render(); // この中の maybeExplain が分析を始める
+    el.explainPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    toast('解説ON — 局面が変わるたびに解説を出し直します');
+  }
+
+  /** 解説モードのとき、まだ解説していない局面なら分析して表示する */
+  function maybeExplain() {
+    if (!state.explainMode) return;
+    if (state.thinking) return;
+    if (state.explainToken === state.token) return; // この局面はもう解説済み
+
     var pos = current();
+    var atTip = state.index === state.positions.length - 1;
+    // これからAIが打つ局面は、指し終わるのを待ってから解説する
+    if (pos.turn !== 0 && pos.turn !== state.playerColor && atTip) return;
+
+    state.explainToken = state.token;
+    el.explainPanel.hidden = false;
+
     if (pos.turn === 0) {
       showFinalReview();
       return;
     }
 
-    el.explainPanel.hidden = false;
     el.explainBody.innerHTML = '';
     el.explainBody.appendChild(para('盤面を読んでいます…'));
-    el.explainPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     var token = state.token;
     ai.call('analyze', {
@@ -816,7 +843,7 @@
       player: pos.turn,
       options: { depth: 9, time: 1800, exact: 16 }
     }, function (report) {
-      if (token !== state.token) return;
+      if (token !== state.token || !state.explainMode) return;
       if (!report) {
         el.explainBody.innerHTML = '';
         el.explainBody.appendChild(para('解析に失敗しました。もう一度お試しください。'));
@@ -1093,7 +1120,7 @@
     el.btnUndo.addEventListener('click', undo);
     el.btnRedo.addEventListener('click', redo);
     el.btnAssist.addEventListener('click', toggleAssist);
-    el.btnExplain.addEventListener('click', explain);
+    el.btnExplain.addEventListener('click', toggleExplain);
 
     el.btnCoords.addEventListener('click', function () {
       state.coords = !state.coords;
@@ -1128,6 +1155,8 @@
         var target = $(btn.dataset.close);
         if (target) target.hidden = true;
         if (btn.dataset.close === 'explainPanel') {
+          state.explainMode = false;
+          state.explainToken = -1;
           state.candidates = [];
           state.assistMove = -1;
           state.assistToken = -1;
@@ -1148,16 +1177,55 @@
     });
   }
 
+  /** 新しいバージョンが用意できたら、画面上部に知らせる */
+  function showUpdateBanner(worker) {
+    if (!el.updateBanner) return;
+    el.updateBanner.hidden = false;
+    el.updateBanner.onclick = function () {
+      el.updateBanner.disabled = true;
+      worker.postMessage({ type: 'SKIP_WAITING' });
+    };
+  }
+
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
+    // localhost 以外の http では SW が使えない（iPhone 実機は GitHub Pages の https で確認する）
     if (location.protocol !== 'https:' && location.hostname !== 'localhost') return;
+
+    var reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloading) return;
+      reloading = true;
+      location.reload();
+    });
+
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js').catch(function () { /* 失敗しても遊べる */ });
+      navigator.serviceWorker.register('sw.js', { scope: './' }).then(function (reg) {
+        // すでに待機中の新バージョンがある（前回開いたときに取得済み）
+        if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg.waiting);
+
+        reg.addEventListener('updatefound', function () {
+          var worker = reg.installing;
+          if (!worker) return;
+          worker.addEventListener('statechange', function () {
+            // controller がある＝初回インストールではなく更新
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+              showUpdateBanner(worker);
+            }
+          });
+        });
+
+        // ホーム画面から起動したアプリは開きっぱなしになりやすいため、表示のたびに更新を確認する
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') reg.update().catch(function () {});
+        });
+      }).catch(function () { /* 登録できなくても遊べる */ });
     });
   }
 
   function init() {
     cacheElements();
+    el.appVersion.textContent = 'バージョン ' + (window.APP_VERSION || '');
     loadSettings();
     buildBoard();
     bindEvents();

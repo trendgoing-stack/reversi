@@ -18,13 +18,29 @@
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
+    <button id="updateBanner" class="update-banner" type="button" hidden>
+      更新があります（タップで再読み込み）
+    </button>
+
     <div class="app">
       <!-- ================= トップ画面 ================= -->
       <section class="home" id="homeScreen">
-        <div class="home-hero">
+        <div class="home-sticky">
           <h1>リバーシ</h1>
-          <p>AIと対戦するオセロ。段位を選んで対局を始めましょう。</p>
+          <div class="color-choice" id="colorChoice">
+            <button type="button" class="color-btn" data-color="1" aria-pressed="true">
+              <span class="stone stone-black" aria-hidden="true"></span>
+              <span>黒（先手）</span>
+            </button>
+            <button type="button" class="color-btn" data-color="-1" aria-pressed="false">
+              <span class="stone stone-white" aria-hidden="true"></span>
+              <span>白（後手）</span>
+            </button>
+          </div>
+          <button type="button" class="start-btn" id="btnStart">対局開始</button>
         </div>
+
+        <button type="button" class="resume-btn" id="btnResume" hidden>対局中の盤面にもどる</button>
 
         <div class="home-block">
           <div class="home-block-head">
@@ -36,35 +52,13 @@
 
         <div class="home-block">
           <div class="home-block-head">
-            <h2>あなたの石</h2>
-            <span class="home-note">黒が先手です</span>
-          </div>
-          <div class="color-choice" id="colorChoice">
-            <button type="button" class="color-btn" data-color="1" aria-pressed="true">
-              <span class="stone stone-black" aria-hidden="true"></span>
-              <span>黒（先手）</span>
-            </button>
-            <button type="button" class="color-btn" data-color="-1" aria-pressed="false">
-              <span class="stone stone-white" aria-hidden="true"></span>
-              <span>白（後手）</span>
-            </button>
-          </div>
-        </div>
-
-        <button type="button" class="start-btn" id="btnStart">対局開始</button>
-        <button type="button" class="resume-btn" id="btnResume" hidden>対局中の盤面にもどる</button>
-
-        <div class="home-block">
-          <div class="home-block-head">
             <h2>勝敗記録</h2>
             <span class="home-note">この端末に保存されます</span>
           </div>
           <div class="home-records" id="homeRecords"></div>
         </div>
 
-        <footer class="app-footer">
-          <span>段位は入門から十段まで。今後さらに追加予定です。</span>
-        </footer>
+        <p class="app-version" id="appVersion"></p>
       </section>
 
       <!-- ================= 対局画面 ================= -->
@@ -111,7 +105,7 @@
           <button type="button" id="btnAssist" class="btn btn-toggle btn-accent" aria-pressed="false">
             <span class="btn-icon">✦</span><span>アシスト</span>
           </button>
-          <button type="button" id="btnExplain" class="btn btn-accent">
+          <button type="button" id="btnExplain" class="btn btn-toggle btn-accent" aria-pressed="false">
             <span class="btn-icon">？</span><span>解説</span>
           </button>
           <button type="button" id="btnCoords" class="btn btn-toggle" aria-pressed="false">
@@ -172,6 +166,7 @@
       </div>
     </div>
 
+    <script src="js/version.js"></script>
     <script src="js/engine.js"></script>
     <script src="js/app.js"></script>
   </body>

@@ -1,86 +1,80 @@
 /**
- * シンプルな Service Worker。
- * - HTML / CSS / JS はネットワーク優先。オフラインのときだけキャッシュを使う
- * - アイコンなどはキャッシュ優先＋裏で更新（stale-while-revalidate）
+ * Service Worker：キャッシュファーストで完全オフライン動作させる。
+ *
+ * 更新の流れ：
+ *  1. ファイルを変更したら VERSION を上げる（node scripts/bump-version.mjs <版>）
+ *  2. ブラウザが sw.js の変化を検出すると、新しい SW がファイルを取り直してキャッシュする
+ *     （HTTP キャッシュを使わず必ずサーバーから取る。古いファイルと新しいファイルが混ざらないように）
+ *  3. 画面上部に「更新があります」を出し、タップされたら新しい SW に切り替えて再読み込みする
+ *  4. 切り替わった SW が古いバージョンのキャッシュを削除する
  *
  * パスはすべて「この sw.js が置かれている場所」からの相対で解決するので、
  * GitHub Pages のサブパス配信（/reversi/）でもそのまま動く。
  */
-const CACHE_NAME = 'reversi-v4';
+const VERSION = '1.0.0'
+const CACHE_PREFIX = 'reversi-'
+const CACHE_NAME = `${CACHE_PREFIX}v${VERSION}`
 
-const ROOT = new URL('./', self.location.href);
-const APP_SHELL = [
-  ROOT.href,
-  new URL('index.html', ROOT).href,
-  new URL('css/style.css', ROOT).href,
-  new URL('js/engine.js', ROOT).href,
-  new URL('js/app.js', ROOT).href,
-  new URL('js/worker.js', ROOT).href,
-  new URL('manifest.webmanifest', ROOT).href,
-  new URL('icons/icon-192.png', ROOT).href,
-  new URL('icons/apple-touch-icon.png', ROOT).href
-];
+// scripts/bump-version.mjs が、ここに漏れがないか確認する
+const ASSETS = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './css/style.css',
+  './js/version.js',
+  './js/engine.js',
+  './js/worker.js',
+  './js/app.js',
+  './icons/apple-touch-icon.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
-  );
-});
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' }))),
+    ),
+  )
+  // すぐには切り替えない（画面側で「更新があります」をタップしてもらう）
+})
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
-});
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
+        ),
+      )
+      .then(() => self.clients.claim()),
+  )
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting()
+})
 
 self.addEventListener('fetch', (event) => {
-  const request = event.request;
-  if (request.method !== 'GET') return;
-  if (!request.url.startsWith(ROOT.href)) return;
+  const request = event.request
+  if (request.method !== 'GET') return
+  const url = new URL(request.url)
+  if (url.origin !== self.location.origin) return
 
-  const path = new URL(request.url).pathname;
-  const isShell = request.mode === 'navigate' || /\.(html|css|js|webmanifest)$/.test(path);
-
-  // アプリ本体(HTML/CSS/JS)は常に最新を取りに行き、通信できないときだけキャッシュを使う。
-  // こうしないと、更新した直後の1回だけ古い版が表示されてしまう。
-  if (isShell) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() =>
-          caches.match(request, { ignoreSearch: true }).then(
-            (cached) => cached || caches.match(new URL('index.html', ROOT).href)
-          )
-        )
-    );
-    return;
-  }
-
-  // アイコンなど更新の少ないものはキャッシュ優先＋裏で更新
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
-  );
-});
+    (async () => {
+      const cache = await caches.open(CACHE_NAME)
+      // ページの表示は常にキャッシュ済みの index.html を返す
+      const cached =
+        request.mode === 'navigate'
+          ? await cache.match('./index.html')
+          : await cache.match(request, { ignoreSearch: true })
+      if (cached) return cached
+      return fetch(request)
+    })(),
+  )
+})

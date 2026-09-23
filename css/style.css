@@ -106,22 +106,34 @@ body {
   gap: 14px;
 }
 
-.home-hero {
-  text-align: center;
-  padding: 10px 0 2px;
+/* タイトル・石の色・対局開始は、スクロールしても画面の上に残す */
+.home-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* .app の余白ぶん外へ広げて、固定されたときに背景が端まで届くようにする */
+  margin:
+    calc(-1 * (env(safe-area-inset-top) + 12px))
+    calc(-1 * (env(safe-area-inset-right) + 12px))
+    0
+    calc(-1 * (env(safe-area-inset-left) + 12px));
+  padding:
+    calc(env(safe-area-inset-top) + 12px)
+    calc(env(safe-area-inset-right) + 12px)
+    12px
+    calc(env(safe-area-inset-left) + 12px);
+  background: linear-gradient(180deg, #0f1f1a 0%, #0f1f1a 80%, rgba(15, 31, 26, 0) 100%);
 }
 
-.home-hero h1 {
-  margin: 0 0 4px;
-  font-size: 30px;
+.home-sticky h1 {
+  margin: 0;
+  text-align: center;
+  font-size: 26px;
   letter-spacing: 0.2em;
   font-weight: 700;
-}
-
-.home-hero p {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-dim);
 }
 
 .home-block-head {
@@ -923,10 +935,30 @@ body {
 
 /* ---------- フッター・トースト・結果 ---------- */
 
-.app-footer {
+/* 新しいバージョンのお知らせ。どこまでスクロールしていても見えるように固定する */
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: calc(env(safe-area-inset-top) + 13px) 16px 13px;
+  background: var(--accent);
+  color: #17251f;
+  font: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.app-version {
+  margin: 4px 0 0;
   text-align: center;
-  font-size: 11px;
-  color: rgba(157, 179, 168, 0.65);
+  font-size: 12px;
+  color: rgba(157, 179, 168, 0.7);
 }
 
 .toast {
