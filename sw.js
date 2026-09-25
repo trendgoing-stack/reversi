@@ -11,7 +11,7 @@
  * パスはすべて「この sw.js が置かれている場所」からの相対で解決するので、
  * GitHub Pages のサブパス配信（/reversi/）でもそのまま動く。
  */
-const VERSION = '1.0.1'
+const VERSION = '1.0.2'
 const CACHE_PREFIX = 'reversi-'
 const CACHE_NAME = `${CACHE_PREFIX}v${VERSION}`
 

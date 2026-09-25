@@ -169,5 +169,16 @@
     <script src="js/version.js"></script>
     <script src="js/engine.js"></script>
     <script src="js/app.js"></script>
+
+    <!--
+      アクセス数の計測（GoatCounter）。クッキーも個人情報も使わない。
+      localhost と file:// は count.js 側で自動的に除外されるので、開発中は記録されない。
+      オフラインのときは読み込みに失敗するだけで、アプリの動作には影響しない。
+    -->
+    <script
+      data-goatcounter="https://km-apps.goatcounter.com/count"
+      async
+      src="//gc.zgo.at/count.js"
+    ></script>
   </body>
 </html>
